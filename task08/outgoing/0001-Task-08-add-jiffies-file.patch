@@ -1,0 +1,36 @@
+From 92386aca9d31e822add582f0eaa80cca46200c52 Mon Sep 17 00:00:00 2001
+From: Juan Antonio <juantaldea@gmail.com>
+Date: Mon, 16 Jul 2018 18:57:21 +0200
+Subject: [0123456789AB] [PATCH 1/2] Task 08: add jiffies file
+
+---
+ task08.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/task08.c b/task08.c
+index 4a77143..448381c 100644
+--- a/task08.c
++++ b/task08.c
+@@ -2,6 +2,7 @@
+ #include <asm/uaccess.h>
+ #include <linux/module.h>
+ #include <linux/debugfs.h>
++#include <linux/jiffies.h>
+ 
+ MODULE_LICENSE("GPL v2");
+ MODULE_AUTHOR("Juan Antonio Aldea-Armenteros");
+@@ -80,6 +81,11 @@ static int __init init_m(void)
+ 		goto fail;
+ 	}
+ 
++	if (!debugfs_create_u32("jiffies", 0444, dir, (u32 *) &jiffies)) {
++		pr_alert("debugfs eudyptula task 8: failed to create /sys/kernel/debug/eudyptula/jiffies\n");
++		goto fail;
++	}
++
+ 	pr_alert("MODULE LOADED.\n");
+ 
+ 	return 0;
+-- 
+2.17.1
+
