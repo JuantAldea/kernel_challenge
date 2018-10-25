@@ -8,10 +8,10 @@ clean:
 	make -C $(KDIR) M=$$PWD clean
 
 load:
-	sudo insmod misc_device_driver.ko
-	lsmod | grep misc
+	sudo insmod task06.ko
+	lsmod | grep task06
 
 unload:
-	sudo rmmod misc_device_driver.ko
+	sudo rmmod task06.ko
 
 reload: all unload load
