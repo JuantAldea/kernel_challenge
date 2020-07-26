@@ -55,8 +55,7 @@ static ssize_t foo_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return result;
 }
 
-static struct kobj_attribute foo_attribute =
-	__ATTR(foo, 0644, foo_show, foo_store);
+static struct kobj_attribute foo_attribute = __ATTR_RW(foo);
 
 
 static ssize_t id_store(struct kobject *kobj, struct kobj_attribute *attr,
@@ -94,8 +93,7 @@ static ssize_t id_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return scnprintf(buf, EUDYP_ID_LEN + 2, "%s\n", EUDYP_ID);
 }
 
-static struct kobj_attribute id_attribute =
-	__ATTR(id, 0644, id_show, id_store);
+static struct kobj_attribute id_attribute = __ATTR_RW(id);
 
 
 static ssize_t jiffies_show(struct kobject *kobj, struct kobj_attribute *attr,
