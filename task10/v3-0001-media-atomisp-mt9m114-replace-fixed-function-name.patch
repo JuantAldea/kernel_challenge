@@ -1,0 +1,48 @@
+From 4182ca2169f1e4e4574f532d816187bd133852f5 Mon Sep 17 00:00:00 2001
+From: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+Date: Sat, 25 Jul 2020 09:17:07 +0200
+Subject: [PATCH v3] media: atomisp-mt9m114: replace fixed function names
+
+There are a couple of debug messages using hardcoded function names
+instead of the preferred __func__ magic constant.
+
+Replace them:
+
+WARNING: Prefer using '"%s...", __func__' to using 'misensor_rmw_reg', this function's name, in a string
+215: FILE: ./media/atomisp/i2c/atomisp-mt9m114.c:215:
++       v4l2_err(client, "misensor_rmw_reg error exit, read failed\n");
+
+WARNING: Prefer using '"%s...", __func__' to using 'misensor_rmw_reg', this function's name, in a string
+236: FILE: ./media/atomisp/i2c/atomisp-mt9m114.c:236:
++       v4l2_err(client, "misensor_rmw_reg error exit, write failed\n");
+
+Signed-off-by: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+---
+ drivers/staging/media/atomisp/i2c/atomisp-mt9m114.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/staging/media/atomisp/i2c/atomisp-mt9m114.c b/drivers/staging/media/atomisp/i2c/atomisp-mt9m114.c
+index 0d60918a9b19..f5de81132177 100644
+--- a/drivers/staging/media/atomisp/i2c/atomisp-mt9m114.c
++++ b/drivers/staging/media/atomisp/i2c/atomisp-mt9m114.c
+@@ -212,7 +212,7 @@ misensor_rmw_reg(struct i2c_client *client, u16 data_length, u16 reg,
+ 
+ 	err = mt9m114_read_reg(client, data_length, reg, &val);
+ 	if (err) {
+-		v4l2_err(client, "misensor_rmw_reg error exit, read failed\n");
++		v4l2_err(client, "%s error exit, read failed\n", __func__);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -233,7 +233,7 @@ misensor_rmw_reg(struct i2c_client *client, u16 data_length, u16 reg,
+ 
+ 	err = mt9m114_write_reg(client, data_length, reg, val);
+ 	if (err) {
+-		v4l2_err(client, "misensor_rmw_reg error exit, write failed\n");
++		v4l2_err(client, "%s error exit, write failed\n", __func__);
+ 		return -EINVAL;
+ 	}
+ 
+-- 
+2.28.0
+
