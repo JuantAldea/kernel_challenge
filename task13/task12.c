@@ -1,8 +1,9 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+
+//https://utcc.utoronto.ca/~cks/space/blog/linux/SlabinfoSlabMerging
 
 #define NAME_LENGTH 20
 
@@ -12,6 +13,8 @@ struct identity {
 	bool  busy;
 	struct list_head list;
 };
+
+static struct kmem_cache *identity_pool;
 
 static LIST_HEAD(identity_list);
 
@@ -26,7 +29,7 @@ static int identity_create(char *name, int id)
 		return -EINVAL;
 	}
 
-	struct identity *node = kmalloc(sizeof(*node), GFP_KERNEL);
+	struct identity *node = kmem_cache_alloc(identity_pool, GFP_KERNEL);
 
 	if (!node)
 		return -ENOMEM;
@@ -62,13 +65,18 @@ static void identity_destroy(int id)
 	}
 
 	list_del(&identity->list);
-	kfree(identity);
+	kmem_cache_free(identity_pool, identity);
 	pr_debug("Deleted ID %d\n", id);
 }
 
 static int __init init_m(void)
 {
-	pr_debug("Added Task12 module\n");
+	pr_debug("Added Task13 module\n");
+
+	identity_pool = KMEM_CACHE(identity, 0);
+
+	if (!identity_pool)
+		return -ENOMEM;
 
 	if (identity_create("Alice", 1))
 		pr_debug("Can't create Alice, ID: 1\n");
@@ -101,7 +109,8 @@ static int __init init_m(void)
 
 static void __exit exit_m(void)
 {
-	pr_debug("Removed Task12 module\n");
+	kmem_cache_destroy(identity_pool);
+	pr_debug("Removed Task13 module\n");
 }
 
 module_init(init_m);
