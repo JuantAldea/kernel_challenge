@@ -1,0 +1,78 @@
+From 906782879ff41265c8ed3ee3ae437ba7081976aa Mon Sep 17 00:00:00 2001
+From: Juan Antonio <JuantAldea@users.noreply.github.com>
+Date: Tue, 22 Sep 2020 02:17:07 +0200
+Subject: [PATCH v1] Use slab cache for task12
+
+Signed-off-by: Juan Antonio <JuantAldea@users.noreply.github.com>
+---
+ task13/task12.c | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/task13/task12.c b/task13/task12.c
+index 6049fa2..eed26ac 100644
+--- a/task13/task12.c
++++ b/task13/task12.c
+@@ -1,9 +1,10 @@
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+-#include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/list.h>
+ 
++//https://utcc.utoronto.ca/~cks/space/blog/linux/SlabinfoSlabMerging
++
+ #define NAME_LENGTH 20
+ 
+ struct identity {
+@@ -13,6 +14,8 @@ struct identity {
+ 	struct list_head list;
+ };
+ 
++static struct kmem_cache *identity_pool;
++
+ static LIST_HEAD(identity_list);
+ 
+ static struct identity *identity_find(int id);
+@@ -26,7 +29,7 @@ static int identity_create(char *name, int id)
+ 		return -EINVAL;
+ 	}
+ 
+-	struct identity *node = kmalloc(sizeof(*node), GFP_KERNEL);
++	struct identity *node = kmem_cache_alloc(identity_pool, GFP_KERNEL);
+ 
+ 	if (!node)
+ 		return -ENOMEM;
+@@ -62,13 +65,18 @@ static void identity_destroy(int id)
+ 	}
+ 
+ 	list_del(&identity->list);
+-	kfree(identity);
++	kmem_cache_free(identity_pool, identity);
+ 	pr_debug("Deleted ID %d\n", id);
+ }
+ 
+ static int __init init_m(void)
+ {
+-	pr_debug("Added Task12 module\n");
++	pr_debug("Added Task13 module\n");
++
++	identity_pool = KMEM_CACHE(identity, 0);
++
++	if (!identity_pool)
++		return -ENOMEM;
+ 
+ 	if (identity_create("Alice", 1))
+ 		pr_debug("Can't create Alice, ID: 1\n");
+@@ -101,7 +109,8 @@ static int __init init_m(void)
+ 
+ static void __exit exit_m(void)
+ {
+-	pr_debug("Removed Task12 module\n");
++	kmem_cache_destroy(identity_pool);
++	pr_debug("Removed Task13 module\n");
+ }
+ 
+ module_init(init_m);
+-- 
+2.28.0
+
