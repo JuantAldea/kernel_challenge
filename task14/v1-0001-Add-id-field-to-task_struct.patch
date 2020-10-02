@@ -1,0 +1,81 @@
+From a0168a4914724510c35db5e5e07c1bf284439fcc Mon Sep 17 00:00:00 2001
+From: Juan Antonio <JuantAldea@users.noreply.github.com>
+Date: Sun, 27 Sep 2020 01:11:42 +0200
+Subject: [PATCH v1] Add id field to task_struct
+
+Signed-off-by: Juan Antonio <JuantAldea@users.noreply.github.com>
+---
+ fs/proc/base.c        | 19 +++++++++++++++++++
+ include/linux/sched.h |  3 +++
+ kernel/fork.c         |  4 ++++
+ 3 files changed, 26 insertions(+)
+
+diff --git a/fs/proc/base.c b/fs/proc/base.c
+index eb2255e95f62..b034d9dc5f2e 100644
+--- a/fs/proc/base.c
++++ b/fs/proc/base.c
+@@ -659,6 +659,24 @@ static int proc_pid_syscall(struct seq_file *m, struct pid_namespace *ns,
+ /*                       Here the fs part begins                        */
+ /************************************************************************/
+ 
++/* Eudyptula Stuff */
++static int proc_id_show(struct seq_file *m, struct pid_namespace *ns,
++				struct pid *pid, struct task_struct *task)
++{
++	unsigned long long id;
++	int res;
++
++	res = lock_trace(task);
++	if (res)
++		return res;
++
++	id = task->id++;
++	seq_printf(m, "%llx\n", id);
++
++	unlock_trace(task);
++	return 0;
++}
++
+ /* permission checks */
+ static int proc_fd_access_allowed(struct inode *inode)
+ {
+@@ -3228,6 +3246,7 @@ static const struct pid_entry tgid_base_stuff[] = {
+ #ifdef CONFIG_PROC_PID_ARCH_STATUS
+ 	ONE("arch_status", S_IRUGO, proc_pid_arch_status),
+ #endif
++	ONE("id",        S_IRUSR, proc_id_show),
+ };
+ 
+ static int proc_tgid_base_readdir(struct file *file, struct dir_context *ctx)
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 4418f5cb8324..a231e0e6ac10 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1295,6 +1295,9 @@ struct task_struct {
+ 	 */
+ 	randomized_struct_fields_end
+ 
++	/* Eudyptula id */
++	unsigned long long id;
++
+ 	/* CPU-specific state of this task: */
+ 	struct thread_struct		thread;
+ 
+diff --git a/kernel/fork.c b/kernel/fork.c
+index 48ed22774efa..a0c72f0341d2 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -2136,6 +2136,10 @@ static __latent_entropy struct task_struct *copy_process(
+ #ifdef CONFIG_BLOCK
+ 	p->plug = NULL;
+ #endif
++
++	/* Eudyptula id */
++	p->id = 0x0123456789ABULL,
++
+ 	futex_init_task(p);
+ 
+ 	/*
+-- 
+2.28.0
+
