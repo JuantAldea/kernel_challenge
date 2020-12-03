@@ -1,0 +1,62 @@
+From e6684ea7df37851d7be8cc3f05036a14a2cc3e1b Mon Sep 17 00:00:00 2001
+From: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+CC: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>,Jiri Kosina <trivial@kernel.org>,Mauro Carvalho Chehab <mchehab+huawei@kernel.org>,Greg Kroah-Hartman <gregkh@linuxfoundation.org>,devel@driverdev.osuosl.org,linux-kernel@vger.kernel.org
+Date: Thu, 19 Nov 2020 11:47:13 +0100
+Subject: [PATCH v2] staging: trivial: hikey9xx: fix be32<->u32 casting
+ warnings
+
+This patch fixes the following warnings reported by sparse, by adding
+missing __force annotations.
+
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+drivers/staging/hikey9xx/hisi-spmi-controller.c:164:24: warning: cast to restricted __be32
+
+drivers/staging/hikey9xx/hisi-spmi-controller.c:239:25: warning: cast from restricted __be32
+
+Rationale for #164:
+data is declared as u32, and it is read and then converted by means of
+be32_to_cpu(). Said function expects a __be32 but data is u32, therefore
+there's a type missmatch here.
+
+Rationale for #239:
+Is the dual of #164. This time data going to be  written so it
+needs to be converted from cpu to __be32, but writel() expects u32 and the
+output of cpu_to_be32 returns a __be32.
+
+Signed-off-by: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+---
+ Changes in V2:
+    - Fix typo in commit message.
+
+ drivers/staging/hikey9xx/hisi-spmi-controller.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/staging/hikey9xx/hisi-spmi-controller.c b/drivers/staging/hikey9xx/hisi-spmi-controller.c
+index f831c43f4783..861aedd5de48 100644
+--- a/drivers/staging/hikey9xx/hisi-spmi-controller.c
++++ b/drivers/staging/hikey9xx/hisi-spmi-controller.c
+@@ -161,7 +161,7 @@ static int spmi_read_cmd(struct spmi_controller *ctrl,
+ 			     SPMI_SLAVE_OFFSET * slave_id +
+ 			     SPMI_APB_SPMI_RDATA0_BASE_ADDR +
+ 			     i * SPMI_PER_DATAREG_BYTE);
+-		data = be32_to_cpu((__be32)data);
++		data = be32_to_cpu((__be32 __force)data);
+ 		if ((bc - i * SPMI_PER_DATAREG_BYTE) >> 2) {
+ 			memcpy(buf, &data, sizeof(data));
+ 			buf += sizeof(data);
+@@ -236,7 +236,7 @@ static int spmi_write_cmd(struct spmi_controller *ctrl,
+ 			buf += (bc % SPMI_PER_DATAREG_BYTE);
+ 		}
+ 
+-		writel((u32)cpu_to_be32(data),
++		writel((u32 __force)cpu_to_be32(data),
+ 		       spmi_controller->base + chnl_ofst +
+ 		       SPMI_APB_SPMI_WDATA0_BASE_ADDR +
+ 		       SPMI_PER_DATAREG_BYTE * i);
+-- 
+2.28.0
+
