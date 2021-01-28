@@ -1,0 +1,120 @@
+From 4e944576180cfbdce2bbd7664362392780e5de44 Mon Sep 17 00:00:00 2001
+From: Juan Antonio <JuantAldea@users.noreply.github.com>
+Date: Fri, 2 Oct 2020 14:24:42 +0200
+Subject: [PATCH v1] Implement syscall sys_eudyptula
+
+This patch implements the new syscall sys_eudyptula.
+This function takes int high_id and int low_id, mushes them together and
+returns of result of comparing the mush with the correct ID, which is
+very well-known to be "0xc49bc9fdc5", in case you have forgotten.
+
+Signed-off-by: Juan Antonio <JuantAldea@users.noreply.github.com>
+---
+ arch/x86/entry/syscalls/syscall_32.tbl |  1 +
+ arch/x86/entry/syscalls/syscall_64.tbl |  1 +
+ include/linux/syscalls.h               |  2 ++
+ include/uapi/asm-generic/unistd.h      |  5 ++++-
+ kernel/Makefile                        |  3 ++-
+ kernel/eudyptula.c                     | 11 +++++++++++
+ kernel/sys_ni.c                        |  2 ++
+ 7 files changed, 23 insertions(+), 2 deletions(-)
+ create mode 100644 kernel/eudyptula.c
+
+diff --git a/arch/x86/entry/syscalls/syscall_32.tbl b/arch/x86/entry/syscalls/syscall_32.tbl
+index 54581ac671b4..900dea7efa07 100644
+--- a/arch/x86/entry/syscalls/syscall_32.tbl
++++ b/arch/x86/entry/syscalls/syscall_32.tbl
+@@ -442,3 +442,4 @@
+ 435	i386	clone3			sys_clone3
+ 437	i386	openat2			sys_openat2
+ 438	i386	pidfd_getfd		sys_pidfd_getfd
++439	i386	eudyptula		sys_eudyptula
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index 37b844f839bc..94c4fea1352a 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -359,6 +359,7 @@
+ 435	common	clone3			sys_clone3
+ 437	common	openat2			sys_openat2
+ 438	common	pidfd_getfd		sys_pidfd_getfd
++439	common	eudyptula		sys_eudyptula
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index 1815065d52f3..0d02d2d44990 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -1004,6 +1004,8 @@ asmlinkage long sys_pidfd_send_signal(int pidfd, int sig,
+ 				       unsigned int flags);
+ asmlinkage long sys_pidfd_getfd(int pidfd, int fd, unsigned int flags);
+ 
++asmlinkage long sys_eudyptula(int high_id, int low_id, unsigned long flags);
++
+ /*
+  * Architecture-specific system calls
+  */
+diff --git a/include/uapi/asm-generic/unistd.h b/include/uapi/asm-generic/unistd.h
+index 3a3201e4618e..9d0e52102275 100644
+--- a/include/uapi/asm-generic/unistd.h
++++ b/include/uapi/asm-generic/unistd.h
+@@ -856,8 +856,11 @@ __SYSCALL(__NR_openat2, sys_openat2)
+ #define __NR_pidfd_getfd 438
+ __SYSCALL(__NR_pidfd_getfd, sys_pidfd_getfd)
+ 
++#define __NR_eudyptula 439
++__SYSCALL(__NR_eudyptula, sys_eudyptula)
++
+ #undef __NR_syscalls
+-#define __NR_syscalls 439
++#define __NR_syscalls 440
+ 
+ /*
+  * 32 bit systems traditionally used different
+diff --git a/kernel/Makefile b/kernel/Makefile
+index 4cb4130ced32..ebdae76810fc 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -10,7 +10,8 @@ obj-y     = fork.o exec_domain.o panic.o \
+ 	    extable.o params.o \
+ 	    kthread.o sys_ni.o nsproxy.o \
+ 	    notifier.o ksysfs.o cred.o reboot.o \
+-	    async.o range.o smpboot.o ucount.o
++	    async.o range.o smpboot.o ucount.o \
++		eudyptula.o
+ 
+ obj-$(CONFIG_MODULES) += kmod.o
+ obj-$(CONFIG_MULTIUSER) += groups.o
+diff --git a/kernel/eudyptula.c b/kernel/eudyptula.c
+new file mode 100644
+index 000000000000..c841d02eeaf7
+--- /dev/null
++++ b/kernel/eudyptula.c
+@@ -0,0 +1,11 @@
++#include <linux/unistd.h>
++#include <linux/syscalls.h>
++
++SYSCALL_DEFINE3(eudyptula, unsigned int, high_id, unsigned int, low_id,
++	unsigned long, flags)
++{
++	if (flags)
++		return -EINVAL;
++
++	return ((uint64_t)high_id << 32 | low_id) == 0xc49bc9fdc5L ? 0 : -EINVAL;
++}
+diff --git a/kernel/sys_ni.c b/kernel/sys_ni.c
+index 3b69a560a7ac..542c3cd05d30 100644
+--- a/kernel/sys_ni.c
++++ b/kernel/sys_ni.c
+@@ -299,6 +299,8 @@ COND_SYSCALL(recvmmsg_time32);
+ COND_SYSCALL_COMPAT(recvmmsg_time32);
+ COND_SYSCALL_COMPAT(recvmmsg_time64);
+ 
++COND_SYSCALL(eudyptula)
++
+ /*
+  * Architecture specific syscalls: see further below
+  */
+-- 
+2.28.0
+
