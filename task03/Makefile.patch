@@ -1,0 +1,30 @@
+Changed Makefile so that the EXTRAVERSION shows "-eudyptula"
+
+Proof:
+
+$ uname -a
+Linux eudyptula-4-8-0-eudyptula-ARCH-00282-g118253a-dirty
+4.8.0-eudyptula-ARCH-00282-g118253a-dirty #8 SMP PREEMPT Sun Aug 14
+14:56:46 CEST 2016 x86_64 GNU/Linux
+
+Signed-off-by: Juan-Antonio <juant.aldea@gmail.com>
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 8c504f3..4ae20ce 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ VERSION = 4
+ PATCHLEVEL = 8
+ SUBLEVEL = 0
+-EXTRAVERSION = -rc1
++EXTRAVERSION = -eudyptula
+ NAME = Psychotic Stoned Sheep
+ 
+ # *DOCUMENTATION*
+-- 
+2.9.2
+
