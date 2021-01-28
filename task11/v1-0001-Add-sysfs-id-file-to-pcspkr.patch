@@ -1,0 +1,83 @@
+From f7e2450a4e543b3392cbacd5c8849244fb176f96 Mon Sep 17 00:00:00 2001
+From: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+Date: Thu, 10 Sep 2020 14:18:16 +0200
+Subject: [PATCH v1] Add sysfs id file to pcspkr
+
+Signed-off-by: Juan Antonio Aldea-Armenteros <juant.aldea@gmail.com>
+---
+ drivers/input/misc/pcspkr.c | 49 ++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 48 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/input/misc/pcspkr.c b/drivers/input/misc/pcspkr.c
+index e5e0d8ba80e1..f73ad12ee36f 100644
+--- a/drivers/input/misc/pcspkr.c
++++ b/drivers/input/misc/pcspkr.c
+@@ -20,6 +20,53 @@ MODULE_DESCRIPTION("PC Speaker beeper driver");
+ MODULE_LICENSE("GPL");
+ MODULE_ALIAS("platform:pcspkr");
+ 
++static const char EUDYP_ID[] = "00c49bc9fdc5";
++static const size_t EUDYP_ID_LEN = 12;
++
++static ssize_t id_store(struct device *dev, struct device_attribute *attr,
++			const char *buf, size_t count)
++{
++	char input[EUDYP_ID_LEN + 1];
++	ssize_t result = -EINVAL;
++
++	if (count != EUDYP_ID_LEN) {
++		pr_alert("WRONG LEN0. %ld, %ld\n", count, EUDYP_ID_LEN);
++		pr_alert("|%.20s|\n", buf);
++		return -EINVAL;
++	}
++
++	result = scnprintf(input, sizeof(input), "%s", buf);
++
++	if (result < 0) {
++		return result;
++	}
++
++	if (strncmp(input, EUDYP_ID, EUDYP_ID_LEN) == 0) {
++		pr_alert("ALL OK.\n");
++		return EUDYP_ID_LEN;
++	}
++
++	pr_alert("WRONG STRING.\n");
++	pr_alert("|%.14s|\n", buf);
++
++	return -EINVAL;
++}
++
++static ssize_t id_show(struct device *dev, struct device_attribute *attr,
++			char *buf)
++{
++	return scnprintf(buf, EUDYP_ID_LEN + 2, "%s\n", EUDYP_ID);
++}
++
++static DEVICE_ATTR_RW(id);
++
++static struct attribute *eudyptula_attrs[] = {
++	&dev_attr_id.attr,
++	NULL,
++};
++
++ATTRIBUTE_GROUPS(eudyptula);
++
+ static int pcspkr_event(struct input_dev *dev, unsigned int type,
+ 			unsigned int code, int value)
+ {
+@@ -126,10 +173,10 @@ static struct platform_driver pcspkr_platform_driver = {
+ 	.driver		= {
+ 		.name	= "pcspkr",
+ 		.pm	= &pcspkr_pm_ops,
++		.dev_groups    = eudyptula_groups
+ 	},
+ 	.probe		= pcspkr_probe,
+ 	.remove		= pcspkr_remove,
+ 	.shutdown	= pcspkr_shutdown,
+ };
+ module_platform_driver(pcspkr_platform_driver);
+-
+-- 
+2.28.0
+
