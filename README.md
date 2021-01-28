@@ -1,6 +1,6 @@
 # Eudyptula Challenge
 
-Solutions for the Eudyptula Challenge [1] tasks.
+Solutions for the Eudyptula Challenge [1] tasks. See `TASKS.md` for the actual tasks.
 
 
 ## What was it? (From [1])
