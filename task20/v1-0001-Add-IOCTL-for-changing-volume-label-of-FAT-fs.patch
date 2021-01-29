@@ -1,0 +1,225 @@
+From ecf6c70a2a7a818652d3fc316b9d9746c2bca85c Mon Sep 17 00:00:00 2001
+From: Juan Antonio <JuantAldea@users.noreply.github.com>
+Date: Wed, 27 Jan 2021 15:11:30 +0100
+Subject: [PATCH v1] Add IOCTL for changing volume label of FAT fs
+
+This patch adds an IOCTL (FAT_IOCTL_SET_VOLUME_LABEL) for setting FAT
+volume labels.
+
+Signed-off-by: Juan Antonio <JuantAldea@users.noreply.github.com>
+---
+ fs/fat/dir.c                  | 156 +++++++++++++++++++++++++++++++++-
+ include/uapi/linux/msdos_fs.h |   2 +
+ 2 files changed, 157 insertions(+), 1 deletion(-)
+
+diff --git a/fs/fat/dir.c b/fs/fat/dir.c
+index c4a274285858..114fa83c3a53 100644
+--- a/fs/fat/dir.c
++++ b/fs/fat/dir.c
+@@ -128,6 +128,29 @@ static inline int fat_get_entry(struct inode *dir, loff_t *pos,
+ 	return fat__get_entry(dir, pos, bh, de);
+ }
+ 
++static int fat_scan_volume_label_entry(struct inode *dir,
++	struct fat_slot_info *sinfo)
++{
++	struct super_block *sb = dir->i_sb;
++
++	sinfo->slot_off = 0;
++	sinfo->bh = NULL;
++	while (fat_get_entry(dir, &sinfo->slot_off, &sinfo->bh,
++				   &sinfo->de) >= 0) {
++
++		if (!IS_FREE((*sinfo->de).name)
++				&& ((*sinfo->de).attr != ATTR_EXT)
++				&& ((*sinfo->de).attr & ATTR_VOLUME)) {
++			sinfo->slot_off -= sizeof(*sinfo->de);
++			sinfo->nr_slots = 1;
++			sinfo->i_pos = fat_make_i_pos(sb, sinfo->bh, sinfo->de);
++			pr_alert("Volume label: %s",  (*sinfo->de).name);
++			return 0;
++		}
++	}
++	return -ENOENT;
++}
++
+ /*
+  * Convert Unicode 16 to UTF-8, translated Unicode, or ASCII.
+  * If uni_xlate is enabled and we can't get a 1:1 conversion, use a
+@@ -784,6 +807,133 @@ static int fat_ioctl_readdir(struct inode *inode, struct file *file,
+ 	return ret;
+ }
+ 
++static int fat_update_boot_sector_label(struct super_block *sb,
++			unsigned char *label)
++{
++	struct msdos_sb_info *sbi;
++	struct buffer_head *bh, *bh_backup;
++	struct fat_boot_sector *b, *b_backup;
++
++	bh = sb_bread(sb, 0);
++	sbi = MSDOS_SB(sb);
++
++	if (bh == NULL)
++		return -1;
++
++	b = (struct fat_boot_sector *) bh->b_data;
++
++	memcpy(is_fat32(sbi) ? b->fat32.vol_label : b->fat16.vol_label,
++		label, MSDOS_NAME);
++
++	if (is_fat32(sbi)) {
++		bh_backup = sb_bread(sb, b->fat32.backup_boot);
++
++		if (bh_backup) {
++			b_backup = (struct fat_boot_sector *)bh_backup->b_data;
++
++			memcpy(b_backup->fat32.vol_label, label, MSDOS_NAME);
++			mark_buffer_dirty(bh_backup);
++			sync_dirty_buffer(bh_backup);
++			brelse(bh_backup);
++		}
++	}
++
++	mark_buffer_dirty(bh);
++	sync_dirty_buffer(bh);
++	brelse(bh);
++	return 0; /*TODO errors? */
++}
++
++static void fat_modify_volume_label_entry(struct inode *dir,
++			struct fat_slot_info *sinfo, unsigned char *label)
++{
++	struct inode *inode;
++
++	memcpy(sinfo->de->name, label, MSDOS_NAME);
++	inode = fat_build_inode(dir->i_sb, sinfo->de, sinfo->i_pos);
++	inode->i_atime = current_time(dir);
++	inode->i_mtime = inode->i_atime
++	mark_inode_dirty(inode);
++	iput(inode);
++}
++
++static int fat_create_volume_label_entry(struct inode *dir,
++			struct fat_slot_info *sinfo, unsigned char *label)
++{
++	struct msdos_dir_entry de;
++	struct timespec64 ts;
++	__le16 time, date;
++
++	ts = current_time(dir);
++	fat_time_unix2fat(MSDOS_SB(dir->i_sb), &ts, &time, &date, NULL);
++
++	memset(&de, 0, sizeof(de));
++	memcpy(de.name, label, MSDOS_NAME);
++	de.attr = ATTR_VOLUME;
++	de.time = time;
++	de.date = date;
++	fat_set_start(&de, 0);
++
++	return fat_add_entries(dir, &de, 1, sinfo);
++}
++
++static int fat_ioctl_set_volume_label(struct inode *dir, unsigned char *label)
++{
++	struct super_block *sb = dir->i_sb;
++	struct msdos_sb_info *sbi = MSDOS_SB(dir->i_sb);
++	struct fat_slot_info sinfo;
++
++	unsigned char msdos_name[MSDOS_NAME] = {0};
++	int err = 0;
++	int len;
++
++	len = strnlen(label, MSDOS_NAME);
++	copy_from_user(&msdos_name, label, len);
++
++	mutex_lock(&sbi->s_lock);
++
++	/* abort if mounted read only */
++	if (sb_rdonly(sb)) {
++		fat_msg(sb, KERN_ALERT, "Unable to change volume label:"
++				"Partition is mounted as READ-only.");
++		err = -EINVAL;
++		goto end;
++	}
++
++	/* abort if fs is dirty */
++	if (sbi->dirty) {
++		fat_msg(sb, KERN_ALERT, "Volume was not properly "
++			"unmounted. Some data may be corrupt. "
++			"Please run fsck.");
++		err = -EINVAL;
++		goto end;
++	}
++
++	if (err)
++		goto end;
++
++	if (!fat_scan_volume_label_entry(dir, &sinfo)) {
++		fat_modify_volume_label_entry(dir, &sinfo, msdos_name);
++	} else {
++		err = fat_create_volume_label_entry(dir, &sinfo, msdos_name);
++		if (err)
++			goto end;
++	}
++
++	fat_truncate_time(dir, NULL, S_CTIME|S_MTIME);
++	if (IS_DIRSYNC(dir))
++		(void)fat_sync_inode(dir);
++	else
++		mark_inode_dirty(dir);
++
++	fat_update_boot_sector_label(sb, msdos_name);
++
++end:
++	mutex_unlock(&sbi->s_lock);
++
++	return err;
++}
++
+ static long fat_dir_ioctl(struct file *filp, unsigned int cmd,
+ 			  unsigned long arg)
+ {
+@@ -800,6 +950,8 @@ static long fat_dir_ioctl(struct file *filp, unsigned int cmd,
+ 		short_only = 0;
+ 		both = 1;
+ 		break;
++	case FAT_IOCTL_SET_VOLUME_LABEL:
++		return fat_ioctl_set_volume_label(inode, (unsigned char *)arg);
+ 	default:
+ 		return fat_generic_ioctl(filp, cmd, arg);
+ 	}
+@@ -819,7 +971,7 @@ static long fat_dir_ioctl(struct file *filp, unsigned int cmd,
+ #ifdef CONFIG_COMPAT
+ #define	VFAT_IOCTL_READDIR_BOTH32	_IOR('r', 1, struct compat_dirent[2])
+ #define	VFAT_IOCTL_READDIR_SHORT32	_IOR('r', 2, struct compat_dirent[2])
+-
++#define FAT_IOCTL_SET_VOLUME_LABEL32	_IOW('r', 0x14, __user char *)
+ FAT_IOCTL_FILLDIR_FUNC(fat_compat_ioctl_filldir, compat_dirent)
+ 
+ static long fat_compat_dir_ioctl(struct file *filp, unsigned cmd,
+@@ -838,6 +990,8 @@ static long fat_compat_dir_ioctl(struct file *filp, unsigned cmd,
+ 		short_only = 0;
+ 		both = 1;
+ 		break;
++	case FAT_IOCTL_SET_VOLUME_LABEL32:
++		return fat_ioctl_set_volume_label(inode, (unsigned char *)arg);
+ 	default:
+ 		return fat_generic_ioctl(filp, cmd, (unsigned long)arg);
+ 	}
+diff --git a/include/uapi/linux/msdos_fs.h b/include/uapi/linux/msdos_fs.h
+index a5773899f4d9..9aa5e1661870 100644
+--- a/include/uapi/linux/msdos_fs.h
++++ b/include/uapi/linux/msdos_fs.h
+@@ -104,6 +104,8 @@ struct __fat_dirent {
+ #define FAT_IOCTL_SET_ATTRIBUTES	_IOW('r', 0x11, __u32)
+ /*Android kernel has used 0x12, so we use 0x13*/
+ #define FAT_IOCTL_GET_VOLUME_ID		_IOR('r', 0x13, __u32)
++#define FAT_IOCTL_SET_VOLUME_LABEL	_IOW('r', 0x14, __user char *)
++
+ 
+ struct fat_boot_sector {
+ 	__u8	ignored[3];	/* Boot strap short or near jump */
+-- 
+2.30.0
+
